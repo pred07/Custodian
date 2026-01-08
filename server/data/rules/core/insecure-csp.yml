@@ -1,0 +1,17 @@
+id: insecure-csp
+name: Insecure CSP Configuration
+version: "1.0.0"
+last_updated: "2026-01-08"
+confidence: high
+severity: high
+description: Detects insecure Content-Security-Policy settings (unsafe-inline, unsafe-eval)
+sinks:
+  - Content-Security-Policy
+  - CSP
+  - csp
+  - csp_header
+  - CONTENT_SECURITY_POLICY
+sources:
+  - unsafe-inline
+  - unsafe-eval
+sanitizers: []

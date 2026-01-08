@@ -1,0 +1,26 @@
+id: command-injection
+name: Command Injection
+version: "1.0.0"
+last_updated: "2026-01-08"
+confidence: high
+severity: high
+description: Detects unsanitized user input in system commands
+sinks:
+  - system
+  - popen
+  - exec
+  - eval
+  - call
+  - run
+  - Popen
+sources:
+  - request.args
+  - request.form
+  - request.json
+  - request.data
+  - request.GET
+  - request.POST
+  - input
+sanitizers:
+  - quote
+  - escape

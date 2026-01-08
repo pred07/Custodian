@@ -1,0 +1,82 @@
+name: Update Security Rules
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly on Sunday
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          npm install ts-node typescript -g
+          # In a real scenario, we'd install specific deps
+          # npm install axios js-yaml
+
+      - name: Sync External Rules
+        run: |
+          # Use npx to run ts-node if not installed globally or just node if compiled
+          # We need to install dependencies for the script first
+          cd scripts
+          npm install axios js-yaml @types/node typescript ts-node --no-save
+          npx ts-node sync-semgrep-rules.ts
+        continue-on-error: true
+
+      - name: Validate Rules
+        run: |
+          cd server
+          npm install
+          # Run simple-test.js to validate basic loading
+          node simple-test.js
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update security rules"
+          title: "chore: update security rules"
+          body: |
+            Automated rule update from external sources.
+            
+            - Synced Semgrep rules
+            - Validated against schema
+          branch: "chore/update-rules"
+          base: "main"
+
+  release:
+    needs: update-rules
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Zip Rules
+        run: |
+          cd server/data
+          zip -r rules.zip rules/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          files: server/data/rules.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

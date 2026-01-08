@@ -1,0 +1,320 @@
+I need to transform my secure coding LSP from a static rule-based system into a self-updating, community-driven platform. Here's what needs to be built:
+
+## CONTEXT
+- Current: LSP server with static rules in `server/data/rules.yml`
+- Goal: Auto-updating system using free resources (GitHub, Groq API, community)
+- Tech stack: TypeScript (server), VS Code extension (client), Tree-sitter for parsing
+
+## TASKS TO IMPLEMENT
+
+### 1. RULE VERSIONING SYSTEM
+Create a new file structure:
+server/data/
+├── rules/
+│   ├── core/              # Universal patterns (always loaded)
+│   │   ├── sql-injection.yml
+│   │   ├── command-injection.yml
+│   │   ├── path-traversal.yml
+│   ├── frameworks/        # Framework-specific
+│   │   ├── django.yml
+│   │   ├── flask.yml
+│   │   ├── fastapi.yml
+│   ├── metadata.json      # Version tracking, last-update timestamps
+├── fixes/                 # Fix templates
+│   ├── sql-injection-fixes.yml
+│   ├── command-injection-fixes.yml
+
+Requirements:
+- Each rule file must have `version` and `last_updated` fields
+- Rules must support semantic versioning (1.2.3)
+- Add `deprecated` flag for old patterns
+- Add `confidence` levels: "high", "medium", "low", "experimental"
+
+### 2. REMOTE RULE UPDATER
+Create `server/src/ruleUpdater.ts`:
+
+Features needed:
+- Check GitHub releases for new rules every 4 hours (configurable)
+- Download only changed rules (compare SHA256 hashes)
+- Fallback to embedded rules if network fails
+- Support offline mode (cache last successful download)
+- Config: `server/config/update-config.json`
+```json
+  {
+    "remoteUrl": "https://api.github.com/repos/YOUR_ORG/secure-rules/releases/latest",
+    "updateInterval": 14400000,
+    "autoUpdate": true,
+    "allowExperimental": false
+  }
+```
+
+Edge cases to handle:
+- Network timeouts (5 second max)
+- Malformed JSON from remote
+- Schema validation (rules must match current format)
+- Rollback mechanism if new rules cause crashes
+
+### 3. COMMUNITY FEEDBACK SYSTEM
+Add telemetry to `server/src/diagnosticsEngine.ts`:
+
+Track (anonymously):
+- Vulnerability detections: `{type_hash, severity, framework, timestamp}`
+- False negatives: User-reported via command
+- Fix acceptance: Did user apply the suggested fix?
+
+Requirements:
+- Hash all sensitive data (no raw code sent)
+- Store locally in `~/.secure-code-assistant/telemetry.json`
+- Batch upload weekly (opt-in only)
+- Use PostHog free tier: https://posthog.com
+- Add VS Code command: "Report False Negative" → Opens GitHub Issue template
+
+### 4. AI RULE GENERATOR (LOCAL SCRIPT)
+Create `scripts/generate-rules-from-cve.py`:
+
+Input: CVE description text
+Output: YAML rule candidate
+
+Requirements:
+- Use Groq API (free tier): https://groq.com
+- Prompt template:
+You are a security expert. Convert this CVE to a detection rule.
+CVE Description:
+{cve_description}
+Output YAML with:
+
+id: unique-kebab-case-id
+name: Human readable name
+severity: 1 (error), 2 (warning), 3 (info)
+description: One sentence explanation
+sinks: [list of dangerous function names]
+sources: [list of taint sources like user_input, request.args]
+patterns: [AST pattern matching rules]
+
+Example output:
+
+id: sql-injection-django-raw
+name: SQL Injection in Django raw()
+severity: 1
+description: User input flows into raw SQL query
+sinks: ["raw", "execute"]
+sources: ["request.GET", "request.POST"]
+
+
+Integration:
+- Store API key in `.env` file (never commit)
+- Rate limit: 1 request per 5 seconds
+- Validate output with JSON schema
+- Add to `rules/experimental/` folder
+- Require human approval before moving to `core/`
+
+### 5. EXTERNAL RULE SYNC
+Create `scripts/sync-semgrep-rules.ts`:
+
+Requirements:
+- Fetch Semgrep Python rules: https://github.com/returntocorp/semgrep-rules/tree/develop/python
+- Convert their YAML format to our format
+- Map their severity to ours (ERROR=1, WARNING=2, INFO=3)
+- Run weekly via GitHub Actions
+- Create PR with synced rules
+
+Edge cases:
+- Handle rules we already have (deduplicate by pattern)
+- Skip rules that don't apply to our analysis (we only do taint analysis)
+- Add `source: semgrep` metadata field
+
+### 6. GITHUB ACTIONS WORKFLOW
+Create `.github/workflows/update-rules.yml`:
+
+Jobs needed:
+1. **fetch-cves**: Download NVD JSON feed weekly
+2. **generate-candidates**: Run AI script on new CVEs
+3. **run-tests**: Validate all rules with `npm test`
+4. **create-pr**: If tests pass, open PR with new rules
+5. **publish-release**: On merge to main, create GitHub release with bundled rules
+
+Requirements:
+- Use repository secrets for API keys
+- Add status badges to README
+- Fail job if tests don't pass
+- Tag releases with semantic versions
+
+### 7. FIX SUGGESTION SYSTEM
+Create `server/src/fixProvider.ts`:
+
+Implements VS Code CodeActionProvider:
+- Read from `server/data/fixes/*.yml`
+- Match vulnerability type to available fixes
+- Return QuickFix actions with:
+  - Title: "🔧 Use parameterized query"
+  - Edit: WorkspaceEdit that replaces vulnerable code
+  - isPreferred: true for high-confidence fixes
+
+Fix template format (fixes/sql-injection-fixes.yml):
+```yaml
+- vulnerability_type: sql-injection
+  fixes:
+    - id: parameterized-query
+      confidence: high
+      title: "Use parameterized query"
+      description: "Replace string interpolation with query parameters"
+      pattern: 'cursor.execute(f"SELECT * FROM {table} WHERE id={id}")'
+      replacement: 'cursor.execute("SELECT * FROM ? WHERE id=?", (table, id))'
+      
+    - id: orm-migration
+      confidence: medium
+      title: "Migrate to ORM"
+      description: "Use Django ORM for safer queries"
+      pattern: 'cursor.execute(*)'
+      replacement: 'MyModel.objects.filter(id=id)'
+```
+
+### 8. CONFIGURATION UI
+Add VS Code settings to `client/package.json`:
+```json
+"configuration": {
+  "properties": {
+    "secureCode.autoUpdate": {
+      "type": "boolean",
+      "default": true,
+      "description": "Automatically check for rule updates"
+    },
+    "secureCode.updateInterval": {
+      "type": "number",
+      "default": 14400000,
+      "description": "Update check interval in milliseconds (4 hours)"
+    },
+    "secureCode.allowExperimental": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable experimental AI-generated rules"
+    },
+    "secureCode.telemetry": {
+      "type": "boolean",
+      "default": false,
+      "description": "Help improve detection by sharing anonymized usage data"
+    },
+    "secureCode.ruleSource": {
+      "type": "string",
+      "enum": ["official", "community", "custom"],
+      "default": "official",
+      "description": "Rule update source"
+    }
+  }
+}
+```
+
+### 9. TESTING FRAMEWORK
+Enhance `server/simple-test.js`:
+
+Add test suites:
+- **Rule validation**: All rules must parse correctly
+- **No false positives**: Test benign code doesn't trigger warnings
+- **Version compatibility**: New rules don't break old code
+- **Performance**: Analysis must complete in <100ms per file
+
+Test data structure:
+server/test/
+├── fixtures/
+│   ├── vulnerable/         # Should trigger warnings
+│   │   ├── sql-injection.py
+│   │   ├── command-injection.py
+│   ├── benign/            # Should NOT trigger warnings
+│   │   ├── safe-query.py
+│   │   ├── safe-subprocess.py
+├── rules/                 # Test rule parsing
+│   ├── valid-rule.yml
+│   ├── invalid-rule.yml
+
+### 10. DOCUMENTATION UPDATES
+Update README.md with:
+- Rule contribution guidelines
+- How to report false negatives
+- How to opt-in to experimental rules
+- Update frequency and sources
+- Privacy policy for telemetry
+
+Add CONTRIBUTING.md:
+- Rule format specification
+- How to test new rules
+- PR requirements
+- Code of conduct
+
+## IMPLEMENTATION PRIORITY
+1. Rule versioning + metadata (foundation)
+2. Remote updater (enables auto-updates)
+3. Fix provider (immediate user value)
+4. Testing framework (quality assurance)
+5. GitHub Actions (automation)
+6. AI generator + Community feedback (scaling)
+
+## CONSTRAINTS
+- Must work offline (embedded fallback rules)
+- Zero external dependencies for core detection
+- All AI features must be opt-in
+- Privacy-first: no code sent to cloud without consent
+- Backwards compatible: old rule format still works
+
+## QUALITY REQUIREMENTS
+- TypeScript strict mode, no `any` types
+- Error handling for all network requests
+- Logging with different levels (debug, info, error)
+- Unit test coverage >80%
+- Performance: Rule updates can't block LSP response
+
+## OUTPUT EXPECTATIONS
+For each task, provide:
+1. Complete file implementation
+2. Integration points with existing code
+3. Error handling strategy
+4. Test cases
+5. Configuration options
+
+Start with Task 1 (Rule Versioning System) and wait for my approval before proceeding to Task 2.
+
+🎯 How to Use This Prompt
+
+Initialize Aider in your repo:
+
+bash   cd /path/to/secure-code-assistant
+   aider --model groq/llama-3.1-70b-versatile  # Free tier
+```
+
+2. **Paste the prompt above**
+
+3. **Aider will ask clarifying questions** - answer them based on your current setup
+
+4. **Review each implementation** before moving to next task
+
+5. **Iterate:** If you don't like the solution, say:
+```
+   "Simplify this - remove the caching layer and just use fetch()"
+```
+
+---
+
+## 🔧 Follow-Up Prompts After Task 1 Completion
+```
+Now implement Task 2 (Remote Rule Updater). 
+Make sure it:
+- Uses the metadata.json from Task 1
+- Has exponential backoff for network failures
+- Logs to VS Code output channel
+```
+```
+Add integration tests for the updater:
+- Mock GitHub API responses
+- Test offline mode
+- Test invalid JSON handling
+```
+```
+Create a VS Code command "Secure Code: Force Update Rules" 
+that manually triggers the updater and shows progress notification
+
+💡 Pro Tips
+
+Be specific about file paths - Aider works best when you say "modify server/src/diagnosticsEngine.ts"
+Request incremental changes - Don't ask for all 10 tasks at once
+Ask for explanations - "Explain why you used setTimeout instead of setInterval here"
+Request alternatives - "Show me 3 different ways to structure the rule versioning"
+Use Aider's memory - Reference previous implementations: "Use the same error handling pattern as the rule updater"

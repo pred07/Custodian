@@ -1,0 +1,56 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Server",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/server"
+            },
+            "problemMatcher": "$tsc",
+            "group": "build"
+        },
+        {
+            "label": "Build Client",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/client"
+            },
+            "problemMatcher": "$tsc",
+            "group": "build"
+        },
+        {
+            "label": "Run Server Tests",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "test"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/server"
+            },
+            "group": "test"
+        },
+        {
+            "label": "Build All",
+            "dependsOn": [
+                "Build Server",
+                "Build Client"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

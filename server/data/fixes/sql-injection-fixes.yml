@@ -1,0 +1,18 @@
+fixes:
+  - id: parameterized-query-sqlite
+    vulnerability_id: sql-injection
+    confidence: high
+    title: "Use parameterized query (SQLite)"
+    description: "Replace f-string with parameterized query"
+    # Matches: cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
+    # Very basic regex for demonstration. Real-world regex is harder.
+    pattern: 'cursor\.execute\(f"SELECT (.*?) FROM (.*?) WHERE (.*?) = \{(.*?)\}"\)'
+    replacement: 'cursor.execute("SELECT $1 FROM $2 WHERE $3 = ?", ($4,))'
+
+  - id: parameterized-query-generic
+    vulnerability_id: sql-injection
+    confidence: medium
+    title: "Use parameterized query (Generic)"
+    description: "Convert string formatting to parameters"
+    pattern: 'cursor\.execute\("(.*?) %s" % (.*?)\)'
+    replacement: 'cursor.execute("$1 ?", ($2,))'

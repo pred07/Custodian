@@ -1,0 +1,26 @@
+id: path-traversal
+name: Path Traversal
+version: "1.0.0"
+last_updated: "2026-01-08"
+confidence: high
+severity: high
+description: Detects unsanitized user input in file operations
+sinks:
+  - open
+  - read
+  - write
+  - remove
+  - unlink
+  - rmdir
+sources:
+  - request.args
+  - request.form
+  - request.json
+  - request.data
+  - request.GET
+  - request.POST
+  - input
+sanitizers:
+  - basename
+  - realpath
+  - abspath

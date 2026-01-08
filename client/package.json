@@ -1,0 +1,88 @@
+{
+    "name": "secure-coding-client",
+    "displayName": "Secure Coding Assistant",
+    "description": "Real-time vulnerability detection while you code",
+    "version": "0.1.0",
+    "publisher": "secure-coding",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Linters",
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onLanguage:python"
+    ],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "secureCode.reportFalseNegative",
+                "title": "Secure Code: Report False Negative"
+            }
+        ],
+        "configuration": {
+            "type": "object",
+            "title": "Secure Coding",
+            "properties": {
+                "secureCode.autoUpdate": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically check for rule updates"
+                },
+                "secureCode.updateInterval": {
+                    "type": "number",
+                    "default": 14400000,
+                    "description": "Update check interval in milliseconds (default: 4 hours)"
+                },
+                "secureCode.allowExperimental": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable experimental AI-generated rules"
+                },
+                "secureCode.telemetry": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Help improve detection by sharing anonymized usage data"
+                },
+                "secureCode.ruleSource": {
+                    "type": "string",
+                    "enum": [
+                        "official",
+                        "community",
+                        "custom"
+                    ],
+                    "default": "official",
+                    "description": "Rule update source"
+                },
+                "secureCoding.trace.server": {
+                    "scope": "window",
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "off",
+                    "description": "Traces the communication between VS Code and the language server."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run build",
+        "build": "tsc -p .",
+        "watch": "tsc -w -p .",
+        "package": "vsce package"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^9.0.1"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "@types/vscode": "^1.85.0",
+        "@vscode/vsce": "^2.22.0",
+        "typescript": "^5.3.3"
+    }
+}

@@ -1,0 +1,100 @@
+# Vulnerability Detection Rules
+# 
+# Schema:
+#   id: Unique identifier
+#   name: Human-readable name
+#   description: What this detects
+#   severity: high | medium | low
+#   sinks: Function calls to watch for
+#   sources: Known taint sources
+#   sanitizers: Functions that clean input (optional)
+
+rules:
+  # SQL Injection
+  - id: sql-injection
+    name: SQL Injection
+    description: Detects unsanitized user input in SQL queries
+    severity: high
+    sinks:
+      - execute      # cursor.execute()
+      - executemany  # cursor.executemany()
+      - raw          # Django raw queries
+    sources:
+      - request.args
+      - request.form
+      - request.json
+      - request.data
+      - request.GET
+      - request.POST
+      - input
+    sanitizers:
+      - quote_identifier
+      - escape_string
+      - parameterize
+
+  # Command Injection
+  - id: command-injection
+    name: Command Injection
+    description: Detects unsanitized user input in system commands
+    severity: high
+    sinks:
+      - system       # os.system()
+      - popen        # os.popen()
+      - exec         # exec()
+      - eval         # eval()
+      - call         # subprocess.call()
+      - run          # subprocess.run()
+      - Popen        # subprocess.Popen()
+    sources:
+      - request.args
+      - request.form
+      - request.json
+      - request.data
+      - request.GET
+      - request.POST
+      - input
+    sanitizers:
+      - quote        # shlex.quote()
+      - escape
+
+  # Path Traversal
+  - id: path-traversal
+    name: Path Traversal
+    description: Detects unsanitized user input in file operations
+    severity: high
+    sinks:
+      - open         # open()
+      - read         # file.read()
+      - write        # file.write()
+      - remove       # os.remove()
+      - unlink       # os.unlink()
+      - rmdir        # os.rmdir()
+    sources:
+      - request.args
+      - request.form
+      - request.json
+      - request.data
+      - request.GET
+      - request.POST
+      - input
+    sanitizers:
+      - basename     # os.path.basename()
+      - realpath     # os.path.realpath()
+      - abspath      # os.path.abspath()
+
+  # Hardcoded Secrets
+  - id: hardcoded-secret
+    name: Hardcoded Secret
+    description: Detects potential hardcoded credentials and API keys
+    severity: medium
+    sinks:
+      - password
+      - secret
+      - api_key
+      - apikey
+      - token
+      - auth
+      - credential
+    sources:
+      - "="  # Assignment operator (special case)
+    sanitizers: []
