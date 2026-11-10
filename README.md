@@ -1,112 +1,63 @@
-# Live Secure Code Assistant
+﻿# Custodian
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
-![Status](https://img.shields.io/badge/status-active-green)
-![Community](https://img.shields.io/badge/governance-community--driven-orange)
+**Experimental Python-focused secure-coding diagnostics for VS Code.** Custodian uses a VS Code extension client and a local TypeScript Language Server Protocol (LSP) service to parse open Python documents, evaluate YAML rules, and publish editor diagnostics.
 
-A real-time secure coding assistant for VS Code that detects vulnerabilities as you type. Now powered by community-sourced rules and AI.
+> **Status:** prototype. The repository does not currently support the broad IDE or language coverage described in earlier copy. The editor client activates for Python only, the parser uses the Python Tree-sitter grammar, and the rules are heuristic rather than a complete security analysis.
 
-## Features
+## Capabilities in this source snapshot
 
-*   **Real-time Vulnerability Detection**: Instant feedback on SQL injection, command injection, and more.
-*   **Auto-Updating Rules**: Fetches the latest security rules from the community each week.
-*   **Quick Fixes**: Automated code replacements for common vulnerabilities (e.g., parameterized queries).
-*   **AI-Powered**: Experimental support for generating rules from CVE descriptions.
-*   **Privacy-First Telemetry**: Opt-in sharing of anonymized detection data to improve rule accuracy.
-*   **Keystroke-Time Detection**: Analyzes code <100ms after you stop typing.
-*   **Sink-First Analysis**: Extremely fast detection by focusing only on dangerous function calls (sinks).
-*   **IDE Agnostic**: Built on the **Language Server Protocol (LSP)**, compatible with VS Code, Neovim, IntelliJ, etc.
-*   **Privacy-First**: Runs 100% locally. No code is sent to the cloud.
-*   **No False Positive Spam**: Explicit confidence levels (`High`, `Medium`, `Low`) to build trust.
+- Parses open Python documents with Tree-sitter and analyzes them after a 300 ms edit debounce.
+- Loads five core YAML rules covering command injection, potential hardcoded secrets, insecure CSP settings, path traversal, and SQL injection.
+- Publishes findings through LSP diagnostics with confidence-based severity mapping.
+- Provides rule-based code actions where a matching fix template exists. The checked-in fix catalog currently covers SQL injection only.
+- Includes separate developer scripts for importing community rules and generating experimental YAML from a CVE description.
 
-## 🛡️ Supported Vulnerabilities
+See [Architecture](docs/ARCHITECTURE.md), [Rule and finding reference](docs/RULES_AND_FINDINGS.md), and [Privacy and data flows](docs/PRIVACY_AND_DATA.md) for implementation details and limitations.
 
-| Vulnerability | Detection Logic | Example |
-| :--- | :--- | :--- |
-| **SQL Injection** | Detects string interpolation in SQL queries | `cursor.execute(f"SELECT * FROM users WHERE id={id}")` |
-| **Command Injection** | Detects user input in system commands | `os.system(f"ping {ip}")` |
-| **Path Traversal** | Detects user input in file paths | `open(f"/var/www/{filename}")` |
-| **Hardcoded Secrets** | Detects hardcoded passwords/keys | `api_key = "sk-12345..."` |
+## Install and run from source
 
-## 🛠️ Architecture
+Requirements: Node.js 18 or later and VS Code 1.85 or later. In a terminal at the repository root:
 
-The system is split into two components:
-
-1.  **LSP Server (`server/`)**: The "brain".
-    *   Written in TypeScript (Node.js).
-    *   Uses **Tree-sitter** for robust parsing of incomplete code.
-    *   Implements a custom **Micro-Taint Analyzer** for finding dirty data flows.
-2.  **LSP Client (`client/`)**: The "thin" UI.
-    *   Standard VS Code extension.
-    *   Simply launches the server and displays diagnostics.
-
-## 📦 Installation & Usage
-
-### Prerequisites
-*   Node.js (v18+)
-*   VS Code
-
-### Setup
-1.  **Clone & Build**:
-    ```bash
-    # Install dependencies
-    cd server && npm install
-    cd ../client && npm install
-
-    # Build everything
-    cd ../server && npm run build
-    cd ../client && npm run build
-    ```
-
-2.  **Run in VS Code**:
-    *   Open the root `secure code` folder in VS Code.
-    *   Press **F5** (Select "Launch Extension").
-    *   A new "Extension Development Host" window will open.
-
-3.  **Test**:
-    *   Open a Python file.
-    *   Type vulnerable code (e.g., `import os; os.system(input())`).
-    *   Wait 300ms.
-    *   See the red squiggle and warning!
-
-## �️ Development Tools
-
-### AI Rule Generator
-Generate new rules from CVE descriptions using AI (requires `GROQ_API_KEY` in `.env`):
 ```bash
-python scripts/generate-rules-from-cve.py "CVE-2023-XXXX: SQL injection in..."
+cd server && npm ci && npm run build
+cd ../client && npm ci && npm run build
 ```
 
-### External Rule Sync
-Sync rules from the Semgrep community repository:
-```bash
-npx ts-node scripts/sync-semgrep-rules.ts
-```
+Open the **Custodian repository root** in VS Code and press **F5** to launch the Extension Development Host. Open a Python file to activate analysis. The server/client launch configuration and package layout are documented in [Development](docs/DEVELOPMENT.md).
 
-### Reporting Issues
-If you find a false positive or negative, use the VS Code command:
-**"Secure Code: Report False Negative"**
-This will open a GitHub issue template with the necessary details.
+The repository currently contains no packaged `.vsix` release. The root has no `LICENSE` file, so the README badge in older copy should not be treated as a complete license grant.
 
-## �🔧 Configuration
+## Privacy and network behavior
 
-Vulnerabilities are defined in `server/data/rules/core/*.yml`. You can add new rules or modify existing ones there.
+Document parsing and analysis run in the local extension process. The current analyzer also writes detection metadata to a local file under `~/.secure-code-assistant/telemetry.json`; the visible `secureCode.telemetry` setting is not wired to that service in this snapshot. The telemetry service stores a rule ID, timestamp, and SHA-256 hash of the finding snippet; no telemetry upload path is present in the checked-in service.
 
-```yaml
-id: sql-injection
-name: SQL Injection
-severity: high
-sinks: ["execute", "executemany"]
-sources: ["request.args", "socket.recv"]
-confidence: high
-```
+The separate CVE rule-generation script sends the supplied CVE description to Groq when run with a Groq API key. It is a developer utility, not part of normal editor analysis. The updater makes a metadata request to a configured URL, but the current implementation does not download or apply rule assets. Review [Privacy and data flows](docs/PRIVACY_AND_DATA.md) before using this prototype with sensitive code.
 
-## 🧪 Testing
+## Supported environment
 
-Run the comprehensive test suite to validate rules against vulnerable and benign fixtures:
-```bash
-npx ts-node server/test/runner.ts
-```
+| Area | Current repository evidence |
+|---|---|
+| Editor client | VS Code extension |
+| Activated language | Python only (`onLanguage:python`) |
+| Parser | Tree-sitter Python grammar |
+| Analysis | Sink-first, intra-procedural heuristic checks |
+| Rule format | YAML files in `server/data/rules/core/` and `frameworks/` |
+| Quick fixes | Template-based; current catalog is SQL injection focused |
+| Other editors/languages | Not established by the checked-in client or parser configuration |
 
-## 📝 License
-MIT
+## Reference guides
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Privacy and data flows](docs/PRIVACY_AND_DATA.md)
+- [Rule and finding reference](docs/RULES_AND_FINDINGS.md)
+- [Development and validation](docs/DEVELOPMENT.md)
+- [Setup](docs/SETUP.md)
+- [Quick start](docs/QUICKSTART.md)
+- [How to run](docs/HOW_TO_RUN.md)
+- [Quick fixes](docs/QUICK_FIX.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Extension not loading](docs/EXTENSION_NOT_LOADING.md)
+
+## License
+
+No root `LICENSE` file is included in this repository snapshot. Confirm the intended license before redistributing the project.
